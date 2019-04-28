@@ -2,8 +2,8 @@
 #include <stdlib.h>
 #include <math.h>
 
-#define nx 100
-#define ny 100
+#define nx 1000
+#define ny 1000
 
 static double* linspace(double start, double stop, int N);
 static void setAll(int Nx, int Ny, double *array, double value);
@@ -27,59 +27,73 @@ int main(int argc, char const *argv[])
     double *y   = linspace(0.0, 5.0, ny);
     double dx   = fabs(x[1] - x[0]); // Delta x
     double dy   = fabs(y[1] - y[0]); // Delta y
-    int nt      = 100; // Number of time steps
     double sigma = 0.2;
     double dt   = sigma*dx; // Time increment
+    double endT = 1.0;
     double c_x  = 1.0; // Wavespeed set to 1.0
     double c_y  = 1.0; // Wavespeed set to 1.0
 
     printf("nx = %i\n", nx);
     printf("dx = %lf\n", dx);
-    printf("nt = %i\n", nt);
+    printf("endT = %lf\n", endT);
     printf("dt = %lf\n", dt);
     printf("cx = %lf\n", c_x);
     printf("cy = %lf\n", c_y);
 
     double *u       = (double*)xcalloc(nx * ny, sizeof(double));
     double *u_prev  = (double*)xcalloc(nx * ny, sizeof(double));
-    setAll(nx, ny, u, 1.0);
+
+    double *v       = (double*)xcalloc(nx * ny, sizeof(double));
+    double *v_prev  = (double*)xcalloc(nx * ny, sizeof(double));
+
+    setAll(nx, ny, u, 0.0);
+    setAll(nx, ny, v, 0.0);
     make2dTopHat(nx, ny, x, y, u);
+    make2dTopHat(nx, ny, x, y, v);
     setEqual(nx, ny, u_prev, u);
+    setEqual(nx, ny, v_prev, v);
 
     saveTwoArrays(nx, x, y, "coords.txt");
-    save2dArray(nx, ny, u, "initial.txt");
+    save2dArray(nx, ny, u, "initial_u.txt");
+    save2dArray(nx, ny, v, "initial_v.txt");
 
     // Time loop
-    double tmp = 0.0;
-    
-	for(int k = 0; k < nt; k++)
+    double tmp_u = 0.0, tmp_v = 0.0;
+    for(double time = 0; time <= endT; time += dt)
     {
-        printf("t = %lf\t|u| = %lf\n", k*dt, norm(nx, ny, u));
+        printf("t = %lf\t|u| = %lf\t|v| = %lf\n", time, norm(nx, ny, u), norm(nx, ny, v));
         for(int i = 0; i < nx; i++)
         {
             for(int j = 0; j < ny; j++)
             {
                 if(i == 0 || j == 0 || i == nx-1 || j == ny-1 )
                 {
-                    tmp = 1.0;
+                    tmp_u = 0.0;
+                    tmp_v = 0.0;
                 }else{
-                    tmp = getElem(u_prev, i,j) - ((c_x * dt)/dx) * ( getElem(u_prev, i,j) - getElem(u_prev, i-1,j) )
-                                                - ((c_y * dt)/dy) * ( getElem(u_prev, i,j) - getElem(u_prev, i,j-1) );
+                    tmp_u = getElem(u_prev, i, j) - ( getElem(u_prev, i, j) * (c_x*dt/dx) * ( getElem(u_prev, i, j) - getElem(u_prev, i-1, j) ) )
+                                            - ( getElem(v_prev, i, j)  * (c_y*dt/dy) * ( getElem(u_prev, i, j) - getElem(u_prev, i, j-1) ) );
+                    tmp_v = getElem(v_prev, i, j) - ( getElem(u_prev, i, j) * (c_x*dt/dx) * ( getElem(v_prev, i, j) - getElem(v_prev, i-1, j) ) )
+                                            - ( getElem(v_prev, i, j)  * (c_y*dt/dy) * ( getElem(v_prev, i, j) - getElem(v_prev, i, j-1) ) );
                 }
-                setElem(u, i, j, tmp);
+                setElem(u, i, j, tmp_u);
+                setElem(v, i, j, tmp_v);
             }
         }
 
         setEqual(nx, ny, u_prev, u);
+        setEqual(nx, ny, v_prev, v);
     }
 
-    save2dArray(nx, ny, u_prev, "final.txt");
-
+    save2dArray(nx, ny, u, "final_u.txt");
+    save2dArray(nx, ny, v, "final_v.txt");
 
     free(x);
     free(y);
     free(u);
     free(u_prev);
+    free(v);
+    free(v_prev);
 
     return 0;
 }
@@ -122,7 +136,7 @@ static void make2dTopHat(int Nx, int Ny, double *x, double *y, double *u){
     for(int i = 0; i < Nx; i++){
         for(int j = 0; j < Ny; j++){
             if(x[i] > 0.75 && x[i] < 1.25 && y[j] > 0.75 && y[j] < 1.25){
-                setElem(u, i, j, 2.0);
+                setElem(u, i, j, 1.0);
             }
         }
     }

@@ -2,8 +2,9 @@
 #include <stdlib.h>
 #include <math.h>
 
-#define nx 100
-#define ny 100
+#define nx 31
+#define ny 31
+#define tolerence 1e-4
 
 static double* linspace(double start, double stop, int N);
 static void setAll(int Nx, int Ny, double *array, double value);
@@ -20,66 +21,73 @@ static double getElem(double *array, int i, int j);
 static void print2dArray(int Nx, int Ny, double *array);
 static void save2dArray(int Nx, int Ny, double *array, char *fname);
 static void make2dTopHat(int Nx, int Ny, double *x, double *y, double *u);
+static double L1norm(int Nx, int Ny, double *array1, double *array2);
 
 int main(int argc, char const *argv[])
 {
-    double *x   = linspace(0.0, 5.0, nx);
-    double *y   = linspace(0.0, 5.0, ny);
+    double *x   = linspace(0.0, 2.0, nx);
+    double *y   = linspace(0.0, 1.0, ny);
     double dx   = fabs(x[1] - x[0]); // Delta x
     double dy   = fabs(y[1] - y[0]); // Delta y
-    int nt      = 100; // Number of time steps
-    double sigma = 0.2;
-    double dt   = sigma*dx; // Time increment
+
     double c_x  = 1.0; // Wavespeed set to 1.0
     double c_y  = 1.0; // Wavespeed set to 1.0
 
     printf("nx = %i\n", nx);
     printf("dx = %lf\n", dx);
-    printf("nt = %i\n", nt);
-    printf("dt = %lf\n", dt);
     printf("cx = %lf\n", c_x);
     printf("cy = %lf\n", c_y);
 
-    double *u       = (double*)xcalloc(nx * ny, sizeof(double));
-    double *u_prev  = (double*)xcalloc(nx * ny, sizeof(double));
-    setAll(nx, ny, u, 1.0);
-    make2dTopHat(nx, ny, x, y, u);
-    setEqual(nx, ny, u_prev, u);
+    double *p       = (double*)xcalloc(nx * ny, sizeof(double));
+    double *p_prev       = (double*)xcalloc(nx * ny, sizeof(double));
+    setAll(nx, ny, p, 0.0);
 
+    for(int j = 0; j < ny; j++){
+        double bVal = y[j];
+        setElem(p, nx-1, j, bVal);
+    }
+
+    setEqual(nx, ny, p_prev, p);
     saveTwoArrays(nx, x, y, "coords.txt");
-    save2dArray(nx, ny, u, "initial.txt");
+    save2dArray(nx, ny, p, "initial.txt");
 
     // Time loop
     double tmp = 0.0;
-    
-	for(int k = 0; k < nt; k++)
+    int iter = 0;
+    double error = L1norm(nx, ny, p, p_prev);
+	while(1)
     {
-        printf("t = %lf\t|u| = %lf\n", k*dt, norm(nx, ny, u));
         for(int i = 0; i < nx; i++)
         {
             for(int j = 0; j < ny; j++)
             {
-                if(i == 0 || j == 0 || i == nx-1 || j == ny-1 )
-                {
-                    tmp = 1.0;
+                if(i == 0){
+                    tmp = 0.0;
+                }else if(i == nx-1){
+                    tmp = y[j];
+                }else if(j == 0){
+                    tmp = getElem(p_prev, i, 1);
+                }else if(j == ny-1){
+                    tmp = getElem(p_prev, i, ny-2);
                 }else{
-                    tmp = getElem(u_prev, i,j) - ((c_x * dt)/dx) * ( getElem(u_prev, i,j) - getElem(u_prev, i-1,j) )
-                                                - ((c_y * dt)/dy) * ( getElem(u_prev, i,j) - getElem(u_prev, i,j-1) );
+                    tmp = (dy*dy)*( getElem(p_prev, i, j+1) + getElem(p_prev, i, j-1) ) + (dx*dx)*( getElem(p_prev, i+1, j) + getElem(p_prev, i-1, j) );
+                    tmp /= 2.0*(dx*dx + dy*dy);
                 }
-                setElem(u, i, j, tmp);
+                setElem(p, i, j, tmp);
             }
         }
-
-        setEqual(nx, ny, u_prev, u);
+        error = L1norm(nx, ny, p, p_prev);
+        printf("Iter = %i, L1norm(p-p_prev) = %lf\n", iter, error);
+        if(error < tolerence){ break; }
+        setEqual(nx, ny, p_prev, p);
+        iter++;
     }
 
-    save2dArray(nx, ny, u_prev, "final.txt");
-
+    save2dArray(nx, ny, p, "final.txt");
 
     free(x);
     free(y);
-    free(u);
-    free(u_prev);
+    free(p);
 
     return 0;
 }
@@ -98,6 +106,17 @@ static double norm(int Nx, int Ny, double *array){
 
     }
     return sqrt(n);
+}
+static double L1norm(int Nx, int Ny, double *array1, double *array2){
+    double n = 0.0;
+    double sum = 0.0;
+    for(int i = 0; i < Nx; i++){
+        for(int j = 0; j < Ny; j++){
+            n += fabs(getElem(array1, i, j) - getElem(array2, i, j));
+            sum += fabs(getElem(array1, i, j));
+        }
+    }
+    return n/sum;
 }
 // Sets array1 = array2
 static void setEqual(int Nx, int Ny, double *array1, double *array2){
@@ -121,7 +140,7 @@ static void makeTopHat(int N, double *x, double *u){
 static void make2dTopHat(int Nx, int Ny, double *x, double *y, double *u){
     for(int i = 0; i < Nx; i++){
         for(int j = 0; j < Ny; j++){
-            if(x[i] > 0.75 && x[i] < 1.25 && y[j] > 0.75 && y[j] < 1.25){
+            if(x[i] > 2.0 && x[i] < 3.0 && y[j] > 2.0 && y[j] < 3.0){
                 setElem(u, i, j, 2.0);
             }
         }

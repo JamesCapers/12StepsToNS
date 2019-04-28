@@ -27,22 +27,23 @@ int main(int argc, char const *argv[])
     double *y   = linspace(0.0, 5.0, ny);
     double dx   = fabs(x[1] - x[0]); // Delta x
     double dy   = fabs(y[1] - y[0]); // Delta y
-    int nt      = 100; // Number of time steps
-    double sigma = 0.2;
-    double dt   = sigma*dx; // Time increment
+    double endT = 10.0;
+    double sigma = 0.25;
+    double nu   = 0.05; // Diffusion coefficient
+    double dt   = sigma*dx*dy/nu; // Time increment
     double c_x  = 1.0; // Wavespeed set to 1.0
     double c_y  = 1.0; // Wavespeed set to 1.0
 
     printf("nx = %i\n", nx);
     printf("dx = %lf\n", dx);
-    printf("nt = %i\n", nt);
+    printf("endT = %lf\n", endT);
     printf("dt = %lf\n", dt);
     printf("cx = %lf\n", c_x);
     printf("cy = %lf\n", c_y);
 
     double *u       = (double*)xcalloc(nx * ny, sizeof(double));
     double *u_prev  = (double*)xcalloc(nx * ny, sizeof(double));
-    setAll(nx, ny, u, 1.0);
+    setAll(nx, ny, u, 0.0);
     make2dTopHat(nx, ny, x, y, u);
     setEqual(nx, ny, u_prev, u);
 
@@ -51,25 +52,24 @@ int main(int argc, char const *argv[])
 
     // Time loop
     double tmp = 0.0;
-    
-	for(int k = 0; k < nt; k++)
+
+	for(double time = 0; time <= endT; time += dt)
     {
-        printf("t = %lf\t|u| = %lf\n", k*dt, norm(nx, ny, u));
+        printf("t = %lf\t|u| = %lf\n", time, norm(nx, ny, u));
         for(int i = 0; i < nx; i++)
         {
             for(int j = 0; j < ny; j++)
             {
                 if(i == 0 || j == 0 || i == nx-1 || j == ny-1 )
                 {
-                    tmp = 1.0;
+                    tmp = 0.0;
                 }else{
-                    tmp = getElem(u_prev, i,j) - ((c_x * dt)/dx) * ( getElem(u_prev, i,j) - getElem(u_prev, i-1,j) )
-                                                - ((c_y * dt)/dy) * ( getElem(u_prev, i,j) - getElem(u_prev, i,j-1) );
+                    tmp = getElem(u_prev, i, j) + ( (nu*dt/(dx*dx)) * ( getElem(u, i+1, j) - 2.0*getElem(u, i, j) + getElem(u, i-1, j) ) )
+                                        + ( (nu*dt/(dy*dy)) * ( getElem(u, i, j+1) - 2.0*getElem(u, i, j) + getElem(u, i, j-1) ) );
                 }
                 setElem(u, i, j, tmp);
             }
         }
-
         setEqual(nx, ny, u_prev, u);
     }
 
@@ -121,7 +121,7 @@ static void makeTopHat(int N, double *x, double *u){
 static void make2dTopHat(int Nx, int Ny, double *x, double *y, double *u){
     for(int i = 0; i < Nx; i++){
         for(int j = 0; j < Ny; j++){
-            if(x[i] > 0.75 && x[i] < 1.25 && y[j] > 0.75 && y[j] < 1.25){
+            if(x[i] > 2.0 && x[i] < 3.0 && y[j] > 2.0 && y[j] < 3.0){
                 setElem(u, i, j, 2.0);
             }
         }
